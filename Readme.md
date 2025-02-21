@@ -103,8 +103,35 @@ Extracted:   45  3200  12000   5000  15000 (Conf:  98%  95%  92%  89%  99%)
 Additionally, it saves the results in a structured JavaScript file:
 ```js
 export const StarshipIFT7 = [
-  { "time": "T+0", "booster_speed": 3200, "booster_altitude": 12000, "ship_speed": 5000, "ship_altitude": 15000, "timeInSec": 0 },
-  { "time": "T+1", "booster_speed": 3400, "booster_altitude": 12500, "ship_speed": 5200, "ship_altitude": 15500, "timeInSec": 1 }
+{
+	"boost_alt" : 0,
+	"boost_alt_confidence" : 95.621681213378906,
+	"boost_speed" : 117,
+	"boost_speed_confidence" : 96.331283569335938,
+	"frame" : 546,
+	"ship_alt" : 0,
+	"ship_alt_confidence" : 96.276702880859375,
+	"ship_speed" : 117,
+	"ship_speed_confidence" : 76.103164672851562,
+	"timeInSec" : 11.06640625,
+	"timer" : "T+00:00:11",
+	"timer_confidence" : 86.704505920410156
+}
+,
+{
+	"boost_alt" : 0,
+	"boost_alt_confidence" : 95.621681213378906,
+	"boost_speed" : 117,
+	"boost_speed_confidence" : 96.331283569335938,
+	"frame" : 547,
+	"ship_alt" : 0,
+	"ship_alt_confidence" : 96.276702880859375,
+	"ship_speed" : 117,
+	"ship_speed_confidence" : 86.489372253417969,
+	"timeInSec" : 11.099609375,
+	"timer" : "T+00:00:11",
+	"timer_confidence" : 86.199371337890625
+}
 ];
 ```
 
