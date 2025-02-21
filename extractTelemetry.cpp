@@ -34,37 +34,75 @@ pair<string, float> extractTextWithConfidence(Mat &frame, Rect roi, tesseract::T
 
   // Set the image for OCR
   ocr.SetImage(gray.data, gray.cols, gray.rows, 1, gray.step);
-  ocr.SetSourceResolution(300);  // Ensure a set DPI
+  ocr.SetSourceResolution(300);
 
   // Get text
   string text = ocr.GetUTF8Text();
 
   // Get confidence
-  float confidence = -1.0f;  // Default in case no confidence is found
+  float confidence = -1.0f;
   tesseract::ResultIterator* ri = ocr.GetIterator();
   if (ri) {
-  confidence = ri->Confidence(tesseract::RIL_TEXTLINE);  // Confidence at line level
-  delete ri;  // Avoid memory leak
+    confidence = ri->Confidence(tesseract::RIL_TEXTLINE);
+    delete ri;
   }
 
   // Clean text output
   text.erase(remove_if(text.begin(), text.end(), ::isspace), text.end());
   if (!isTime) {
-  text.erase(remove_if(text.begin(), text.end(), [](char c) { return !isdigit(c); }), text.end());
+    text.erase(remove_if(text.begin(), text.end(), [](char c) { return !isdigit(c); }), text.end());
   }
 
-  return {text, confidence};  // Return both text and confidence
+  return {text, confidence};
 }
 
-int main() {
-  string video_path = "StarshipIFT7.mp4"; // Change as needed
-  string output_js_file = "StarshipIFT7.js";
+int main(int argc, char* argv[]) {
+  if (argc < 2) {
+    cerr << "Usage: " << argv[0] << " <video_path> [-ss start_time] [-to end_time]" << endl;
+    return 1;
+  }
 
+  string video_path;
+  double start_time = 0.0;
+  double end_time = -1.0;
+
+  // Parse command-line arguments
+  for (int i = 1; i < argc; i++) {
+    string arg = argv[i];
+    if (arg == "-ss" && i + 1 < argc) {
+      start_time = atof(argv[i + 1]);
+      i++;
+    } else if (arg == "-to" && i + 1 < argc) {
+      end_time = atof(argv[i + 1]);
+      i++;
+    } else if (video_path.empty()) {
+      video_path = arg;
+    }
+  }
+
+  string output_js_file = video_path.substr(0, video_path.find_last_of('.')) + ".js";
+  
   VideoCapture cap(video_path);
   if (!cap.isOpened()) {
     cerr << "Error: Could not open video file." << endl;
     return -1;
   }
+
+  double fps = cap.get(CAP_PROP_FPS);
+  int total_frames = static_cast<int>(cap.get(CAP_PROP_FRAME_COUNT));
+
+  int start_frame = static_cast<int>(start_time * fps);
+  int end_frame = (end_time > 0) ? static_cast<int>(end_time * fps) : total_frames - 1;
+
+  if (start_frame >= total_frames) {
+    cerr << "Error: Start time exceeds video duration." << endl;
+    return 1;
+  }
+  if (end_frame > total_frames) {
+    end_frame = total_frames - 1;
+  }
+
+  cap.set(CAP_PROP_POS_FRAMES, start_frame);
 
   ofstream jsFile(output_js_file);
   jsFile << "export const StarshipIFT7 = [\n";
@@ -78,14 +116,13 @@ int main() {
 
   bool liftoff = false;
   bool alreadyPrintedHeadings = false;
-  int startFrame = 0;
-  int frame_count = 0;
-  int num_frames = 1000;
+  int timerStartFrame = 0;
+  int frame_count = start_frame;
 
-  while (true || (frame_count < num_frames)) {
+  while (frame_count <= end_frame) {
     Mat frame;
     if (!cap.read(frame)) {
-      cout << "End of video or error reading frame." << endl;
+      cout << "End of video detected or error reading frame." << endl;
       break;
     }
 
@@ -101,7 +138,7 @@ int main() {
         if (!liftoff && text.find("T+") == 0) {
           cout << "Liftoff detected!" << endl;
           liftoff = true;
-          startFrame = frame_count;
+          timerStartFrame = frame_count;
         }
       } else if (liftoff) {
         try {
@@ -109,12 +146,12 @@ int main() {
         } catch (...) {
           extracted_data[region.label] = "NaN";
         }
-        extracted_data[region.label+"_confidence"] = confidence;
+        extracted_data[region.label + "_confidence"] = confidence;
       }
     }
 
     if (liftoff) {
-      extracted_data["timeInSec"] = max(0.0, round((frame_count - startFrame) * 1024 / 30) / 1024);
+      extracted_data["timeInSec"] = max(0.0, round((frame_count - timerStartFrame) * 1024 / 30) / 1024);
       jsFile << extracted_data.toStyledString() << ",\n";
       if (!alreadyPrintedHeadings) {
         // Print out headings just once
@@ -130,8 +167,6 @@ int main() {
         alreadyPrintedHeadings = true;
       }
     }
-
-
     // Print extracted values (excluding confidence values)
     cout << "\rFrame: " << setw(6) << frame_count << " Data: ";
 
@@ -157,8 +192,7 @@ int main() {
       }
     }
     cout << ") " << flush;
-        
-    //cout << extracted_data.toStyledString();
+
     frame_count++;
   }
 
