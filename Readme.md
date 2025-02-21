@@ -64,6 +64,22 @@ cmake ..
 make
 ```
 
+### Downloading and Preparing Video to Process
+
+Navigate to the twitter/X post that contains a video of the livestream that you want, right click on it, and select "Copy Video Address".
+
+You will need to install the command line tool "yt-dlp" and then run it using the copied link.
+
+```sh
+ & 'C:\Program Files\yt-dlp\yt-dlp.exe' "https://x.com/i/broadcasts/1OwGWNYrzZVKQ"
+```
+
+You can install ffmpeg and use it to trim the video down to just the portion containing the telemetry. For example...
+
+```sh
+ffmpeg -ss 0:40:00.0 -to 0:48:35 -i '.\Starship''s Seventh Flight Test [1OwGWNYrzZVKQ].mp4' StarshipIFT7.mp4
+````
+
 ## **Running the Program**
 After compiling, run the program with:
 ```sh
@@ -75,7 +91,9 @@ After compiling, run the program with:
 ./extractTelemetry StarshipIFT7.mp4
 ```
 
-This will extract telemetry data from `StarshipIFT7.mp4` and output the results.
+This will extract telemetry data from `StarshipIFT7.mp4`.
+
+You can also add the options "-ss" and "-to" (with timestamps) to extract telemetry from a portion of the video.
 
 ## **Output**
 The program prints extracted telemetry values in real-time:
