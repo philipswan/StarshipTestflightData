@@ -2,6 +2,8 @@
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
 #include <iostream>
+#include <sstream>
+#include <vector>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -56,6 +58,31 @@ pair<string, float> extractTextWithConfidence(Mat &frame, Rect roi, tesseract::T
   return {text, confidence};
 }
 
+double timeToFloat(const std::string& timeStr) {
+  std::istringstream ss(timeStr);
+  std::vector<std::string> parts;
+  std::string segment;
+
+  // Split the input string by ':'
+  while (std::getline(ss, segment, ':')) {
+    parts.push_back(segment);
+  }
+
+  // Convert components to seconds
+  double totalSeconds = 0.0;
+  if (parts.size() == 3) {  // HH:MM:SS
+    totalSeconds = std::stod(parts[0]) * 3600 + std::stod(parts[1]) * 60 + std::stod(parts[2]);
+  } else if (parts.size() == 2) {  // MM:SS
+    totalSeconds = std::stod(parts[0]) * 60 + std::stod(parts[1]);
+  } else if (parts.size() == 1) {  // SS
+    totalSeconds = std::stod(parts[0]);
+  } else {
+    throw std::invalid_argument("Invalid time format");
+  }
+
+  return totalSeconds;
+}
+
 int main(int argc, char* argv[]) {
   if (argc < 2) {
     cerr << "Usage: " << argv[0] << " <video_path> [-ss start_time] [-to end_time]" << endl;
@@ -70,17 +97,19 @@ int main(int argc, char* argv[]) {
   for (int i = 1; i < argc; i++) {
     string arg = argv[i];
     if (arg == "-ss" && i + 1 < argc) {
-      start_time = atof(argv[i + 1]);
+      start_time = timeToFloat(argv[i + 1]);
       i++;
     } else if (arg == "-to" && i + 1 < argc) {
-      end_time = atof(argv[i + 1]);
+      end_time = timeToFloat(argv[i + 1]);
       i++;
     } else if (video_path.empty()) {
       video_path = arg;
     }
   }
+  cout << "StartTime:" << start_time << "s EndTime:" << end_time << "s" << endl;
 
-  string output_js_file = video_path.substr(0, video_path.find_last_of('.')) + ".js";
+  string dataset_name = video_path.substr(0, video_path.find_last_of('.'));
+  string output_js_file = dataset_name + ".js";
   
   VideoCapture cap(video_path);
   if (!cap.isOpened()) {
@@ -105,7 +134,7 @@ int main(int argc, char* argv[]) {
   cap.set(CAP_PROP_POS_FRAMES, start_frame);
 
   ofstream jsFile(output_js_file);
-  jsFile << "export const StarshipIFT7 = [\n";
+  jsFile << "export const " << dataset_name << " = [\n";
 
   tesseract::TessBaseAPI ocr;
   if (ocr.Init(NULL, "eng", tesseract::OEM_LSTM_ONLY)) {
