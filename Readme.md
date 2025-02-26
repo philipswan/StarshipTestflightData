@@ -1,6 +1,8 @@
 # ExtractTelemetry
 
-ExtractTelemetry is a C++ tool that processes video frames, extracts telemetry data using OCR (Tesseract), and outputs the results in a structured format.
+ExtractTelemetry.cpp is a C++ tool that processes video frames, extracts telemetry data using OCR (Tesseract), and outputs the results in a structured format.
+
+(Note: ExtractTelemetry.py was abandoned because it was too slow, but I checked it in anyway in case someone wants to try to improve it.)
 
 ## **Features**
 - Extracts numerical telemetry values from video overlays
