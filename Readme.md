@@ -4,6 +4,9 @@ ExtractTelemetry.cpp is a C++ tool that processes video frames, extracts telemet
 
 (Note: ExtractTelemetry.py was abandoned because it was too slow, but I checked it in anyway in case someone wants to try to improve it.)
 
+## **Sample Plot** (after some manual cleanup of OCR mistakes)
+![Chart of Starship IFT-7 Speed and Altitude](ChartOfStarshipIFT7.jpg)
+
 ## **Features**
 - Extracts numerical telemetry values from video overlays
 - Uses OpenCV for video frame processing
