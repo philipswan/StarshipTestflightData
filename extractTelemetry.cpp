@@ -24,7 +24,11 @@ vector<OCRRegion> regions = {
   {"boost_speed", Rect(333, 912, 113, 29)},
   {"boost_alt", Rect(362, 948, 88, 26)},
   {"ship_speed", Rect(1518, 912, 113, 29)},
-  {"ship_alt", Rect(1538, 948, 93, 26)}
+  {"ship_alt", Rect(1538, 948, 93, 26)},
+  {"boost_lox", Rect(275, 1006, 240, 4)},
+  {"boost_ch4", Rect(275, 1040, 240, 4)},
+  {"ship_lox", Rect(1455, 1005, 240, 4)},
+  {"ship_ch4", Rect(1455, 1035, 240, 4)}
 };
 
 // Function to extract text from an image and report confidence level
@@ -83,6 +87,50 @@ double timeToFloat(const std::string& timeStr) {
   return totalSeconds;
 }
 
+// Function to calculate fill fraction and confidence of a bar
+pair<float, float> extractFillFraction(Mat &frame, Rect roi, const string &label, int frame_count) {
+
+  Mat cropped = frame(roi);
+
+  Mat gray;
+  cvtColor(cropped, gray, COLOR_BGR2GRAY);
+  threshold(gray, gray, 56, 255, THRESH_BINARY);
+
+  // Save the cropped image
+  if (frame_count == 5950) {
+    imwrite("grayscale_" + label + "_" + to_string(frame_count) + ".png", gray);
+  }
+    
+  int white_pixels = countNonZero(gray);
+  int total_pixels = gray.total();
+  float fill_fraction = (total_pixels > 0) ? (white_pixels / static_cast<float>(total_pixels)) : 0;
+  int bar_white_width = (int)round(gray.cols * fill_fraction);
+  int bar_black_width = gray.cols - bar_white_width;
+  Rect roi_white = Rect(0, 0, bar_white_width, gray.rows);
+  Rect roi_black = Rect(bar_white_width, 0, bar_black_width, gray.rows);
+  Mat bar_white = gray(roi_white);
+  Mat bar_black = gray(roi_black);
+  int white_pixels_in_white = countNonZero(bar_white);
+  int white_pixels_in_black = countNonZero(bar_black);
+  int black_pixels_in_white = bar_white.total() - white_pixels_in_white;
+  int black_pixels_in_black = bar_black.total() - white_pixels_in_black;
+  float confidence = 100 * (white_pixels_in_white + black_pixels_in_black) / static_cast<float>(total_pixels);
+
+  // Save the cropped image
+  if (fill_fraction<0.9 && label.find("ship") != string::npos) {
+    Rect extraROI = roi;
+    extraROI.y -= 6;
+    extraROI.height += 12;
+    extraROI.x -= 6;
+    extraROI.width += 12;
+    Mat cropped = frame(extraROI);
+    imwrite("cropped_" + label + "_" + to_string(frame_count) + ".png", cropped);
+    exit(0);
+  }
+  
+  return {fill_fraction, confidence};
+}
+
 int main(int argc, char* argv[]) {
   if (argc < 2) {
     cerr << "Usage: " << argv[0] << " <video_path> [-ss start_time] [-to end_time]" << endl;
@@ -135,6 +183,7 @@ int main(int argc, char* argv[]) {
 
   ofstream jsFile(output_js_file);
   jsFile << "export const " << dataset_name << " = [\n";
+  jsFile << setprecision(2);
 
   tesseract::TessBaseAPI ocr;
   if (ocr.Init(NULL, "eng", tesseract::OEM_LSTM_ONLY)) {
@@ -159,23 +208,32 @@ int main(int argc, char* argv[]) {
     extracted_data["frame"] = frame_count;
 
     for (const auto &region : regions) {
-      auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, region.label == "timer");
 
       if (region.label == "timer") {
+        auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, region.label == "timer");
         extracted_data["timer"] = text;
-        extracted_data["timer_confidence"] = confidence;
+        extracted_data["timer_conf"] = confidence;
         if (!liftoff && text.find("T+") == 0) {
           cout << "Liftoff detected!" << endl;
           liftoff = true;
           timerStartFrame = frame_count;
         }
-      } else if (liftoff) {
-        try {
-          extracted_data[region.label] = stoi(text);
-        } catch (...) {
-          extracted_data[region.label] = "NaN";
+      } 
+      else if (liftoff) {
+        if (region.label.find("lox") != string::npos || region.label.find("ch4") != string::npos) {
+          auto [fill_fraction, confidence] = extractFillFraction(frame, region.boundingBox, region.label, frame_count);
+          extracted_data[region.label] = fill_fraction;
+          extracted_data[region.label + "_conf"] = confidence;
         }
-        extracted_data[region.label + "_confidence"] = confidence;
+        else {
+          auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, region.label == "timer");
+          try {
+            extracted_data[region.label] = stoi(text);
+          } catch (...) {
+            extracted_data[region.label] = "NaN";
+          }
+          extracted_data[region.label + "_conf"] = confidence;
+        }
       }
     }
 
@@ -195,6 +253,11 @@ int main(int argc, char* argv[]) {
         cout << ")" << endl << flush;
         alreadyPrintedHeadings = true;
       }
+
+
+      //if (frame_count == 5950) exit(0);
+
+
     }
     // Print extracted values (excluding confidence values)
     cout << "\rFrame: " << setw(6) << frame_count << " Data: ";
@@ -211,7 +274,7 @@ int main(int argc, char* argv[]) {
     // Print confidence values separately
     cout << "(Conf:";
     for (const auto &region : regions) {
-      string confidenceKey = region.label + "_confidence";
+      string confidenceKey = region.label + "_conf";
       
       if (extracted_data.isMember(confidenceKey)) {  // Check if confidence value exists
         Json::Value confidenceValue = extracted_data[confidenceKey];
