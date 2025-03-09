@@ -45,7 +45,11 @@ vcpkg install opencv tesseract jsoncpp
 ## **Compilation**
 ### **Using g++**
 ```sh
-g++ -o extractTelemetry.exe extractTelemetry.cpp `pkg-config --cflags --libs opencv4 jsoncpp` -llept -ltesseract -std=c++17
+g++ -std=c++20 extractTelemetry.cpp -o extractTelemetry \
+  `pkg-config --cflags --libs opencv4 jsoncpp` \
+  -I/usr/include/tesseract -L/usr/lib/x86_64-linux-gnu -ltesseract \
+  -Wno-deprecated-enum-enum-conversion
+
 ```
 
 ### **Using CMake**

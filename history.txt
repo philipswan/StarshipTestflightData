@@ -1,0 +1,58 @@
+86  g++ --version
+87  sudo apt update && sudo apt upgrade -y
+88  sudo apt install g++-13 gcc-13 -y
+89  g++ --version
+90  exit
+91  g++ --version
+92  g++-13 --version
+93  ls /usr/bin/g++*
+94  apt list --installed | grep gcc
+95  sudo apt update
+96  sudo apt install gcc-13 g++-13 -y
+97  g++-13 --version
+98  g++ --version
+99  exit
+100  g++ --version
+101  exit
+102  sudo apt update && sudo apt upgrade -y
+103  g++ --version
+104  sudo apt install gcc-13 g++-13 -y
+105  lsb_release -a
+106  sudo apt update && sudo apt full-upgrade -y
+107  wsl --shutdown
+108  exit
+109  apt search gcc | grep "^gcc-"
+110  sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+111  sudo apt update
+112  sudo apt install gcc-13 g++-13 -y
+113  g++-13 --version
+114  sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+115  sudo update-alternatives --config gcc
+116  g++ --version
+117  ls /usr/bin/g++*
+118  sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+119  sudo update-alternatives --config g++
+120  sudo ln -sf /usr/bin/g++-13 /usr/bin/g++
+121  g++ --version
+122  g++ -o extractTelemetry.exe extractTelemetry.cpp `pkg-config --cflags --libs opencv4 jsoncpp` -llept -ltesseract -std=c++20
+123  cd Documents/StarshipTestflightData/
+124  g++ -o extractTelemetry.exe extractTelemetry.cpp `pkg-config --cflags --libs opencv4 jsoncpp` -llept -ltesseract -std=c++20
+125  g++ -std=c++20 extractTelemetry.cpp -o extractTelemetry `pkg-config --cflags --libs opencv4 jsoncpp` -Wno-deprecated-enum-enum-conversion
+126  sudo apt install --reinstall libtesseract-dev libleptonica-dev tesseract-ocr -y
+127  pkg-config --cflags --libs tesseract
+128  ls /usr/lib | grep libtesseract
+129  pkg-config --cflags --libs tesseract
+130  tesseract --version
+131  sudo apt remove --purge tesseract-ocr libtesseract-dev -y
+132  tesseract --version
+133  sudo add-apt-repository ppa:alex-p/tesseract-ocr-devel -y
+134  tesseract --version
+135  sudo add-apt-repository ppa:alex-p/tesseract-ocr-devel -y
+136  sudo apt update
+137  sudo apt install tesseract-ocr libtesseract-dev -y
+138  tesseract --version
+139  find /usr -name "libtesseract.so*"
+140  g++ -std=c++20 extractTelemetry.cpp -o extractTelemetry   `pkg-config --cflags --libs opencv4 jsoncpp`   -I/usr/include/tesseract -L/usr/lib/x86_64-linux-gnu -ltesseract   -Wno-deprecated-enum-enum-conversion
+141  sudo ldconfig
+142  ldconfig -p | grep tesseract
+143  history
