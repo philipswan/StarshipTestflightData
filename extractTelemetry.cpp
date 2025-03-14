@@ -16,65 +16,72 @@
 #include <format>
 #include <iomanip>
 #include <cmath>
+#include <filesystem>
+#include "OrientationDetector.hpp"
 
-constexpr int PRECISION = 2;
+constexpr int conf_precision = 2;
 
 using namespace cv;
 using namespace std;
+namespace fs = std::filesystem;  // Standard C++17 filesystem
 
 struct OCRRegion {
   string label;
   Rect boundingBox;
+  unsigned int precision;
 };
+
 struct verification_check {
-  int frame_count;
+  int frame_number;
   string label;
   std::string expected_value;
 };
 
 // Define regions for extraction
 vector<OCRRegion> regions = {
-  {"timer", Rect(856, 946, 206, 39)},
-  {"boost_speed", Rect(333, 912, 113, 29)},
-  {"boost_alt", Rect(362, 948, 88, 26)},
-  {"ship_speed", Rect(1518, 912, 113, 29)},
-  {"ship_alt", Rect(1538, 948, 93, 26)},
-  {"boost_lox", Rect(275, 1006, 240, 4)},
-  {"boost_ch4", Rect(275, 1040, 240, 4)},
-  {"ship_lox", Rect(1455, 1005, 240, 4)},
-  {"ship_ch4", Rect(1455, 1035, 240, 4)}
+  {"timer", Rect(856, 946, 206, 39), 0},
+  {"boost_speed", Rect(333, 910, 113, 33), 0},
+  {"boost_alt", Rect(362, 946, 88, 30), 0},
+  {"ship_speed", Rect(1518, 910, 113, 33), 0},
+  {"ship_alt", Rect(1538, 946, 93, 30), 0},
+  {"boost_lox", Rect(275, 1006, 240, 4), 2},
+  {"boost_ch4", Rect(275, 1040, 240, 4), 2},
+  {"ship_lox", Rect(1455, 1005, 240, 4), 2},
+  {"ship_ch4", Rect(1455, 1035, 240, 4), 2},
+  {"boost_angle", Rect(560, 898, 164, 164), 4},
+  {"ship_angle", Rect(1177, 897, 164, 164), 4}
 };
 
 // Function to compare std::variant with a generic value
-std::string floatToStringWithPrecision(float value) {
-  return std::format("{:.{}f}", value, PRECISION);
+std::string floatToStringWithPrecision(float value, unsigned int precision) {
+  return std::format("{:.{}f}", value, precision);
   // For older compilers...
   // std::ostringstream out;
-  // out << std::fixed << std::setprecision(PRECISION) << value;
+  // out << std::fixed << std::setprecision(precision) << value;
   // return out.str();
 }
 
-std::string getFormattedJsonValue(const Json::Value& value) {
+std::string getFormattedJsonValue(const Json::Value& value, unsigned int precision) {
   if (value.isDouble()) {
     std::ostringstream out;
-    out << std::fixed << std::setprecision(PRECISION) << value.asDouble();
+    out << std::fixed << std::setprecision(precision) << value.asDouble();
     return out.str();
   }
   return value.asString();  // Default conversion for non-floats
 }
 
 // Function to format float values manually
-std::string formatFixedPoint(double value) {
-  long long scaled = std::llround(value * std::pow(10, PRECISION));
+std::string formatFixedPoint(double value, unsigned int precision) {
+  long long scaled = std::llround(value * std::pow(10, precision));
   std::string str_value = std::to_string(std::abs(scaled));  // Convert to string
 
-  // Ensure at least two decimal places exist
-  while (str_value.length() < 3) {
+  // Ensure at least precision decimal places exist
+  while (str_value.length() < precision+1) {
     str_value = "0" + str_value;  // Pad with leading zeros if needed
   }
 
   // Insert decimal point
-  std::string formatted = (scaled < 0 ? "-" : "") + str_value.substr(0, str_value.length() - 2) + "." + str_value.substr(str_value.length() - 2);
+  std::string formatted = (scaled < 0 ? "-" : "") + str_value.substr(0, str_value.length() - precision) + ((precision>0) ? "." : "") + str_value.substr(str_value.length() - precision);
   
   return formatted;
 }
@@ -85,6 +92,25 @@ void writeJsonWithPrecision(const Json::Value& json, std::ofstream& jsFile) {
   bool first = true;
 
   for (const auto& key : json.getMemberNames()) {
+    unsigned int precision = 0;
+    if (key == "frame" || key == "timer") {
+      precision = 0;
+    }
+    else if (key == "timeInSec") {
+      precision = 4;
+    }
+    else if (key.find("conf") != string::npos) {
+      precision = conf_precision;
+    } 
+    else {
+      for (const auto &region : regions) {
+        if (region.label == key) {
+          precision = region.precision;
+          break;
+        }
+      }
+    }
+
     if (!first) jsFile << ",\n";  // Proper JSON formatting
     first = false;
 
@@ -92,7 +118,7 @@ void writeJsonWithPrecision(const Json::Value& json, std::ofstream& jsFile) {
 
     // Check if value is a float/double
     if (json[key].isDouble()) {
-      jsFile << formatFixedPoint(json[key].asDouble());  // Write manually formatted float
+      jsFile << formatFixedPoint(json[key].asDouble(), precision);  // Write manually formatted float
     } 
     // Handle strings properly
     else if (json[key].isString()) {
@@ -107,18 +133,84 @@ void writeJsonWithPrecision(const Json::Value& json, std::ofstream& jsFile) {
   jsFile << "\n}";  // Close JSON object
 }
 
+void generateTrainingData(const Mat& img, const string& text, const string& outputBase) {
+    // Ensure output directory exists
+    string outputDir = "training_data/";
+    string tiffFile = outputDir + outputBase + ".tif";
+    string boxFile = outputDir + outputBase + ".box";
+    string debugFile = outputDir + outputBase + "_debug.png";
+
+    // Save the input image as a TIFF file for Tesseract training
+    imwrite(tiffFile, img);
+    cout << "Saved training image: " << tiffFile << endl;
+
+    // Open the box file for writing
+    ofstream box(boxFile);
+    if (!box) {
+        cerr << "Error: Could not create box file: " << boxFile << endl;
+        return;
+    }
+
+    // Make a copy of the image for debugging
+    Mat debugImg = img.clone();
+
+    // Determine character width (assuming monospaced characters)
+    int imgWidth = img.cols;
+    //int imgHeight = img.rows;
+    int boxWidth = 30;  // 
+    int charSpacing = 32;  // Assume characters are spaced 32 pixels apart
+    int boxHeight = 42;  // Assume characters are half the image height
+    int rightMargin = 10;  // Margin on the right side of the last character
+    int topMargin = 10;  // Margin on the top side of the characters
+
+    // Write the box file and draw boxes on the debug image
+    for (size_t i = 0; i < text.length(); i++) {
+        char c = text[i];
+        int x1 = imgWidth - rightMargin - (i+1) * charSpacing;
+        int y1 = topMargin;
+        int x2 = x1 + boxWidth;
+        int y2 = y1 + boxHeight;
+
+        // Write box file entry
+        box << c << " " << x1 << " " << y1 << " " << x2 << " " << y2 << " 0" << endl;
+
+        // Draw a red rectangle on the debug image
+        rectangle(debugImg, Point(x1, y1), Point(x2, y2), Scalar(0, 0, 255), 1);
+    }
+
+    box.close();
+    cout << "Saved training box file: " << boxFile << endl;
+
+    // Save the debug image with drawn boxes
+    imwrite(debugFile, debugImg);
+    cout << "Saved debug image with boxes: " << debugFile << endl;
+}
+
 // Function to extract text from an image and report confidence level
 pair<string, float> extractTextWithConfidence(
   Mat &frame,
   Rect roi,
   tesseract::TessBaseAPI &ocr,
+  int &training_image_count,
   bool isTime = false,
+  unsigned int precision = 0,
+  bool dump_training_data = false,
   std::optional<verification_check> check = std::nullopt)
 {
   Mat cropped = frame(roi);
+  double scaleFactor = 2.0;  // Scale image to 200% size
+  cv::resize(cropped, cropped, cv::Size(), scaleFactor, scaleFactor, cv::INTER_LANCZOS4);
+
   Mat gray;
   cvtColor(cropped, gray, COLOR_BGR2GRAY);
   threshold(gray, gray, 0, 255, THRESH_BINARY_INV + THRESH_OTSU);
+  int border_height = 10;
+  cv::Rect border_roi(0, border_height, gray.cols, gray.rows);
+  cv::Mat borderedImg(gray.rows+2*border_height, gray.cols, gray.type(), cv::Scalar(255));
+  gray.copyTo(borderedImg(border_roi));
+  gray = borderedImg;
+
+  ocr.SetPageSegMode(tesseract::PSM_SINGLE_LINE);
 
   // Set the image for OCR
   ocr.SetImage(gray.data, gray.cols, gray.rows, 1, gray.step);
@@ -135,6 +227,18 @@ pair<string, float> extractTextWithConfidence(
     delete ri;
   }
 
+  if (text.length() == 1) {
+    ocr.SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
+    ocr.SetImage(gray.data, gray.cols, gray.rows, 1, gray.step);
+    ocr.SetSourceResolution(300);
+    text = ocr.GetUTF8Text();
+    tesseract::ResultIterator* ri = ocr.GetIterator();
+    if (ri) {
+      confidence = ri->Confidence(tesseract::RIL_TEXTLINE);
+      delete ri;
+    }
+  }
+
   // Clean text output
   text.erase(remove_if(text.begin(), text.end(), ::isspace), text.end());
   if (!isTime) {
@@ -144,29 +248,40 @@ pair<string, float> extractTextWithConfidence(
   string current_value;
   if (check->label == "timer") {
     current_value = text;
-  } else {
+  }
+  else {
     try {
-      current_value = to_string(stoi(text)) + "." + std::string(PRECISION, '0');
+      current_value = to_string(stoi(text));
     } catch (...) {
       current_value = "NaN";
     }
   }
   //if (check) cout << check->label << " " << check->expected_value << " " << current_value << endl;
 
-  // Save the cropped image
-  if (check && (check->expected_value != current_value)) {
-    cout << "Mismatch: " << check->label << " " << check->expected_value << " " << current_value << endl; 
-    Rect extraROI = roi;
-    extraROI.y -= 6;
-    extraROI.height += 12;
-    extraROI.x -= 6;
-    extraROI.width += 12;
-    Mat cropped = frame(extraROI);
-    std::string confidence_string = floatToStringWithPrecision(confidence);
-    imwrite("cropped_pics/crop_" + check->label + "_" + to_string(check->frame_count) + "_" + text + "_" + confidence_string + ".png", cropped);
-    imwrite("cropped_pics/gray_" + check->label + "_" + to_string(check->frame_count) + "_" + text + "_" + confidence_string + ".png", gray);
+  if (dump_training_data && (confidence>.97) && !isTime && check && (text.length() > 3) && (check->label.find("boost") != string::npos)) {
+    //std::string baseName = check->label + "_" + to_string(check->frame_number) + "_" + text;
+    std::string baseName = "eng.spacex.exp" + to_string(training_image_count);
+    training_image_count++;
+
+    generateTrainingData(cropped, text, baseName);
   }
 
+  // Save the cropped image
+  // Hack
+  if (confidence > 0.2) {
+    if (check && (check->expected_value != current_value)) {
+      cout << "Mismatch: " << check->label << " " << check->expected_value << " " << current_value << endl; 
+      Rect extraROI = roi;
+      extraROI.y -= 6;
+      extraROI.height += 12;
+      extraROI.x -= 6;
+      extraROI.width += 12;
+      Mat cropped = frame(extraROI);
+      std::string confidence_string = floatToStringWithPrecision(confidence, precision);
+      imwrite("cropped_pics/" + check->label + "_" + to_string(check->frame_number) + "_" + text + "_" + confidence_string + "_crop.png", cropped);
+      imwrite("cropped_pics/" + check->label + "_" + to_string(check->frame_number) + "_" + text + "_" + confidence_string + "_gray.png", gray);
+    }
+  }
 
   return {text, confidence};
 }
@@ -201,7 +316,8 @@ pair<float, float> extractFillFraction(
   Mat &frame,
   Rect roi,
   const string &label,
-  int frame_count,
+  int frame_number,
+  unsigned int precision = 0,
   std::optional<verification_check> check = std::nullopt)
 {
 
@@ -212,8 +328,8 @@ pair<float, float> extractFillFraction(
   threshold(gray, gray, 56, 255, THRESH_BINARY);
 
   // Save the cropped image
-  if (frame_count == 5950) {
-    imwrite("grayscale_" + label + "_" + to_string(frame_count) + ".png", gray);
+  if (frame_number == 5950) {
+    imwrite("grayscale_" + label + "_" + to_string(frame_number) + ".png", gray);
   }
     
   int white_pixels = countNonZero(gray);
@@ -227,12 +343,12 @@ pair<float, float> extractFillFraction(
   Mat bar_black = gray(roi_black);
   int white_pixels_in_white = countNonZero(bar_white);
   int white_pixels_in_black = countNonZero(bar_black);
-  int black_pixels_in_white = bar_white.total() - white_pixels_in_white;
+  //int black_pixels_in_white = bar_white.total() - white_pixels_in_white;
   int black_pixels_in_black = bar_black.total() - white_pixels_in_black;
   float confidence = 100.0 * (white_pixels_in_white + black_pixels_in_black) / total_pixels;
 
-  std::string fill_fraction_string = floatToStringWithPrecision(fill_fraction);
-  std::string confidence_string = floatToStringWithPrecision(confidence);
+  std::string fill_fraction_string = floatToStringWithPrecision(fill_fraction, precision);
+  std::string confidence_string = floatToStringWithPrecision(confidence, conf_precision);
 
   // Save the cropped image
   if (check && (check->expected_value != fill_fraction_string)) {
@@ -242,8 +358,8 @@ pair<float, float> extractFillFraction(
     extraROI.x -= 6;
     extraROI.width += 12;
     Mat cropped = frame(extraROI);
-    imwrite("cropped_pics/crop_" + check->label + "_" + to_string(check->frame_count)+ "_" + fill_fraction_string + "_" + confidence_string + ".png", cropped);
-    imwrite("cropped_pics/gray_" + check->label + "_" + to_string(check->frame_count)+ "_" + fill_fraction_string + "_" + confidence_string + ".png", gray);
+    imwrite("cropped_pics/" + check->label + "_" + to_string(check->frame_number)+ "_" + fill_fraction_string + "_" + confidence_string + "_crop.png", cropped);
+    imwrite("cropped_pics/" + check->label + "_" + to_string(check->frame_number)+ "_" + fill_fraction_string + "_" + confidence_string + "_gray.png", gray);
     //exit(0);
   }
 
@@ -293,10 +409,16 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   
+  OrientationDetector* fullstackOrientationDetector = new OrientationDetector("fullstack_vertical.png");
+  OrientationDetector* boostOrientationDetector = new OrientationDetector("boost_vertical.png");
+  OrientationDetector* shipOrientationDetector = new OrientationDetector("ship_vertical.png");
+
   string video_path;
   double start_time = 0.0;
   double end_time = -1.0;
   bool dump_cropped_pics = false;
+  bool dump_training_data = false;
+  int training_image_count = 0;
 
   // Parse command-line arguments
   for (int i = 1; i < argc; i++) {
@@ -312,6 +434,10 @@ int main(int argc, char* argv[]) {
     else if (arg == "-dump_cropped_pics") {
       dump_cropped_pics = true;
       mkdir("cropped_pics", 0777);
+    } 
+    else if (arg == "-dump_training_data") {
+      dump_training_data = true;
+      mkdir("training_data", 0777);
     } 
     else if (video_path.empty()) {
       video_path = arg;
@@ -356,18 +482,26 @@ int main(int argc, char* argv[]) {
   jsFile << setprecision(2);
 
   tesseract::TessBaseAPI ocr;
-  if (ocr.Init(NULL, "eng", tesseract::OEM_LSTM_ONLY)) {
+  if (ocr.Init("/usr/share/tesseract-ocr/5/tessdata/", "spacex", tesseract::OEM_LSTM_ONLY)) {
+    cerr << "Did not fine spacex.traineddata. Using default training as fallback." << endl;
+  }
+  else if (ocr.Init(NULL, "eng", tesseract::OEM_LSTM_ONLY)) {
     cerr << "Could not initialize Tesseract OCR." << endl;
     return -1;
   }
-  ocr.SetVariable("tessedit_char_whitelist", "0123456789T+-:");
+  ocr.SetVariable("load_system_dawg", "0");  // Disable dictionary-based corrections
+  ocr.SetVariable("load_freq_dawg", "0");    // Disable frequency-based word corrections
 
   bool liftoff = false;
   bool alreadyPrintedHeadings = false;
   int timerStartFrame = 0;
-  int frame_count = start_frame;
+  int frame_number = start_frame;
 
-  while (frame_count <= end_frame) {
+  while (frame_number <= end_frame) {
+
+    // Debug hack for training ocr
+    //if (frame_number>=1882) dump_training_data = true; else dump_training_data = false;
+
     Mat frame;
     
     if (!cap.read(frame)) {
@@ -378,44 +512,67 @@ int main(int argc, char* argv[]) {
     Json::Value extracted_data;
     Json::Value edited_entry = Json::nullValue;
     if (liftoff && dump_cropped_pics) {
-      edited_entry = edited_data[frame_count-timerStartFrame];
+      edited_entry = edited_data[frame_number-timerStartFrame];
       int frame_count_in_entry = edited_entry["frame"].asInt();
-      if (frame_count_in_entry != frame_count) {
-        cerr << "Error: Frame count mismatch in edited dataset. " << frame_count_in_entry << " " << frame_count << endl;
+      if (frame_count_in_entry != frame_number) {
+        cerr << "Error: Frame count mismatch in edited dataset. " << frame_count_in_entry << " " << frame_number << endl;
         exit(1);
       }
-
     }
 
-    extracted_data["frame"] = frame_count;
+    extracted_data["frame"] = frame_number;
+    double timeInSec = max(0.0, round((frame_number - timerStartFrame) * 1024 / 30) / 1024);
 
     for (const auto &region : regions) {
       optional<verification_check> check = (liftoff && dump_cropped_pics && !edited_entry.isNull())
-        ? optional<verification_check>({frame_count, region.label, getFormattedJsonValue(edited_entry[region.label])})
+        ? optional<verification_check>({frame_number, region.label, getFormattedJsonValue(edited_entry[region.label], region.precision)})
         : nullopt;
 
       if (region.label == "timer") {
-        auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, region.label == "timer", check);
+        ocr.SetVariable("tessedit_char_whitelist", "0123456789T+-:");
+        ocr.SetVariable("classify_bln_numeric_mode", "0");  // Enable numeric mode
+        auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, training_image_count, region.label == "timer", region.precision, dump_training_data, check);
         extracted_data["timer"] = text;
         extracted_data["timer_conf"] = confidence;
         if (!liftoff && text.find("T+") == 0) {
           cout << "Liftoff detected!" << endl;
           liftoff = true;
-          timerStartFrame = frame_count;
+          timerStartFrame = frame_number;
           // Grab the first edited entry for the timer
           optional<verification_check> check = (liftoff && dump_cropped_pics && !edited_entry.isNull())
-          ? optional<verification_check>({frame_count, region.label, getFormattedJsonValue(edited_entry[region.label])})
+          ? optional<verification_check>({frame_number, region.label, getFormattedJsonValue(edited_entry[region.label], region.precision)})
           : nullopt;
         }
       } 
       else if (liftoff) {
         if (region.label.find("lox") != string::npos || region.label.find("ch4") != string::npos) {
-          auto [fill_fraction, confidence] = extractFillFraction(frame, region.boundingBox, region.label, frame_count, check);
+          auto [fill_fraction, confidence] = extractFillFraction(frame, region.boundingBox, region.label, frame_number, region.precision, check);
           extracted_data[region.label] = fill_fraction;
           extracted_data[region.label + "_conf"] = confidence;
         }
+        else if (region.label.find("angle") != string::npos) {
+          if (region.label.find("boost_angle") != string::npos) {
+            if (timeInSec<2*60+42) {
+              auto [angle, confidence] = fullstackOrientationDetector->detectRotationAngle(frame, region.boundingBox, region.label, frame_number);
+              extracted_data[region.label] = angle;
+              extracted_data[region.label + "_conf"] = confidence;
+            }
+            else {
+              auto [angle, confidence] = boostOrientationDetector->detectRotationAngle(frame, region.boundingBox, region.label, frame_number);
+              extracted_data[region.label] = angle;
+              extracted_data[region.label + "_conf"] = confidence;
+            }
+          }
+          else {
+            auto [angle, confidence] = shipOrientationDetector->detectRotationAngle(frame, region.boundingBox, region.label, frame_number);
+            extracted_data[region.label] = angle;
+            extracted_data[region.label + "_conf"] = confidence;
+          }
+        }
         else {
-          auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, region.label == "timer", check);
+          ocr.SetVariable("tessedit_char_whitelist", "0123456789");
+          ocr.SetVariable("classify_bln_numeric_mode", "1");  // Enable numeric mode
+          auto [text, confidence] = extractTextWithConfidence(frame, region.boundingBox, ocr, training_image_count, region.label == "timer", region.precision, dump_training_data, check);
           try {
             extracted_data[region.label] = stoi(text);
           } catch (...) {
@@ -427,9 +584,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (liftoff) {
-      extracted_data["timeInSec"] = max(0.0, round((frame_count - timerStartFrame) * 1024 / 30) / 1024);
+      extracted_data["timeInSec"] = timeInSec;
       writeJsonWithPrecision(extracted_data, jsFile);
-      if (frame_count < end_frame) {
+      if (frame_number < end_frame) {
         jsFile << ",\n";
       }
       if (!alreadyPrintedHeadings) {
@@ -447,12 +604,12 @@ int main(int argc, char* argv[]) {
       }
 
 
-      //if (frame_count == 5950) exit(0);
+      //if (frame_number == 5950) exit(0);
 
 
     }
     // Print extracted values (excluding confidence values)
-    cout << "\rFrame: " << setw(6) << frame_count << " Data: ";
+    cout << "\rFrame: " << setw(6) << frame_number << " Data: ";
 
     for (const auto &region : regions) {
       Json::Value value = extracted_data[region.label];  // Correctly retrieve the value
@@ -480,7 +637,8 @@ int main(int argc, char* argv[]) {
     }
     cout << ") " << flush;
 
-    frame_count++;
+    frame_number++;
+
   }
 
   jsFile << "];\n";
@@ -489,5 +647,10 @@ int main(int argc, char* argv[]) {
   ocr.End();
 
   cout << "Saved extracted data to " << output_js_file << endl;
+
+  delete boostOrientationDetector;
+  delete shipOrientationDetector;
+  delete fullstackOrientationDetector;
+  
   return 0;
 }

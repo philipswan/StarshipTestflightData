@@ -56,3 +56,6 @@
 141  sudo ldconfig
 142  ldconfig -p | grep tesseract
 143  history
+
+
+sudo apt install --reinstall tesseract-ocr-eng -y

@@ -1,4 +1,7 @@
 *.png
 extractTelemetry
 *.mp4
-
+*.o
+training_data
+training_data.old
+training_data.old2
