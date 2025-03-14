@@ -174,8 +174,9 @@ export const StarshipIFT7 = [
   - Ensure `ocr.SetSourceResolution(300);` is set in the code.
 
 - **OCR Accuracy Issues**
-  - Try adjusting the thresholding parameters in OpenCV.
-  - Use a higher-resolution input video.
+  Tesseract seems to be make occasional mistakes even when the text is clear.
+  You can correct some of the data manually and then rename the file from, for example, StarshipIFT7.js to StarshipIFT7_edited.js. Then, if you call run extractTelemetry with the -dump_cropped_pics option, it will save small images in a "cropped_pics" subfolder to show you what it's seeing when it makes mistakes.
+  You may want to try asking the Tesseract community for help with improving the ocr accuracy at: https://groups.google.com/g/tesseract-issues/c/ or https://github.com/tesseract-ocr/tesseract/issues/4285
 
 ## **Contributing**
 Contributions are welcome! Feel free to open an issue or submit a pull request.
