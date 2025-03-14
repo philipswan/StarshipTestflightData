@@ -45,7 +45,7 @@ vcpkg install opencv tesseract jsoncpp
 ## **Compilation**
 ### **Using g++**
 ```sh
-g++ -std=c++20 extractTelemetry.cpp -o extractTelemetry \
+g++ -std=c++20 extractTelemetry.cpp OrientationDetector.cpp -o extractTelemetry \
   `pkg-config --cflags --libs opencv4 jsoncpp` \
   -I/usr/include/tesseract -L/usr/lib/x86_64-linux-gnu -ltesseract \
   -Wno-deprecated-enum-enum-conversion
@@ -61,7 +61,7 @@ project(ExtractTelemetry)
 find_package(OpenCV REQUIRED)
 find_package(Tesseract REQUIRED)
 
-add_executable(extractTelemetry extractTelemetry.cpp)
+add_executable(extractTelemetry extractTelemetry.cpp OrientationDetector.cpp)
 target_link_libraries(extractTelemetry ${OpenCV_LIBS} tesseract jsoncpp)
 ```
 2. **Build the project**:
