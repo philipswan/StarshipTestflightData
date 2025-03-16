@@ -42,14 +42,30 @@ brew install cmake opencv tesseract
 vcpkg install opencv tesseract jsoncpp
 ```
 
+### **Configuring Tesseract (on Ubuntu)**
+Tesseract is and open source ocr library. The version that appears to work the best is 5.5.0 with the "eng_best" model. Some operating systems may install a less up-to-date version of tesseract, so verify
+which version is installed on you system with
+```tesseract --version```
+
+If you have version 5.5.0 installed, then you should also check the models that are installed with the command
+```
+tesseract --list-langs
+```
+If you do not see "eng_best" listed, then you can download this model.
+```
+$ cd /usr/share/tesseract-ocr/5/tessdata 
+/usr/share/tesseract-ocr/5/tessdata$ sudo wget https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata -O eng_best.traineddata
+```
+
 ## **Compilation**
+A Makefile has been checked in, so you should just be able to just type ```make```, but if that doesn't work...
+
 ### **Using g++**
 ```sh
 g++ -std=c++20 extractTelemetry.cpp OrientationDetector.cpp -o extractTelemetry \
   `pkg-config --cflags --libs opencv4 jsoncpp` \
   -I/usr/include/tesseract -L/usr/lib/x86_64-linux-gnu -ltesseract \
   -Wno-deprecated-enum-enum-conversion
-
 ```
 
 ### **Using CMake**
@@ -180,6 +196,21 @@ export const StarshipIFT7 = [
 
 ## **Contributing**
 Contributions are welcome! Feel free to open an issue or submit a pull request.
+
+## **Known Issues**
+Sometimes one of the libraries used by the program outputs unwanted text to the console. 
+```
+Total count=0
+Min=0.00 Really=0
+Lower quartile=0.00
+Median=0.00, ile(0.5)=0.00
+Upper quartile=0.00
+Max=0.00 Really=0
+Range=1
+Mean= 0.00
+SD= 0.00
+```
+If you know how to debug and fix this issue, you help would be very much appreciated!
 
 ## **License**
 This project is licensed under the MIT License.
