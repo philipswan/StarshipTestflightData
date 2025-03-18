@@ -409,6 +409,8 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   
+  cout << "If you found this tool to be useful, please consider pitching in to help out The Atlantis Project (project-atlantis.com)." << endl;
+
   OrientationDetector* fullstackOrientationDetector = new OrientationDetector("fullstack_vertical.png");
   OrientationDetector* boostOrientationDetector = new OrientationDetector("boost_vertical.png");
   OrientationDetector* shipOrientationDetector = new OrientationDetector("ship_vertical.png");
@@ -482,10 +484,7 @@ int main(int argc, char* argv[]) {
   jsFile << setprecision(2);
 
   tesseract::TessBaseAPI ocr;
-  if (ocr.Init("/usr/share/tesseract-ocr/5/tessdata/", "spacex", tesseract::OEM_LSTM_ONLY)) {
-    cerr << "Did not fine spacex.traineddata. Using default training as fallback." << endl;
-  }
-  else if (ocr.Init(NULL, "eng", tesseract::OEM_LSTM_ONLY)) {
+  if (ocr.Init(NULL, "eng_best", tesseract::OEM_LSTM_ONLY)) {
     cerr << "Could not initialize Tesseract OCR." << endl;
     return -1;
   }
